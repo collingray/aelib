@@ -27,8 +27,10 @@ class AutoEncoderSweeperConfig:
     lr: the learning rate to use
     beta1: beta1 for adam
     beta2: beta2 for adam
-    lambda_reg: the regularization strength to use for the autoencoder
-    warmup_percent: the percentage of steps to use for warmup
+    l1_weight: the l1 loss weight
+    lr_warmup_pct: the percentage of steps to use for warmup
+    lr_decay_pct: the percentage of steps to use for decay
+    l1_warmup_pct: the percentage of steps to use for l1 warmup
     dtype: the dtype to use for the model and autoencoder
     device: the device to use for the model and autoencoder
     layer: the layer of the model to train the autoencoder on (0-indexed)
@@ -52,8 +54,10 @@ class AutoEncoderSweeperConfig:
     lr: List[float]
     beta1: List[float]
     beta2: List[float]
-    lambda_reg: List[float]
-    warmup_percent: List[float]
+    l1_weight: List[float]
+    lr_warmup_pct: List[float]
+    lr_decay_pct: List[float]
+    l1_warmup_pct: List[Optional[float]]
     layer: List[int]
     act_norms: Optional[List[float]]
     act_renorm_type: List[Literal["linear", "sqrt", "log", "none"]]
@@ -85,7 +89,6 @@ def create_trainer_worker(pidx: int, offset: int, sweep_cfgs: list[dict], act_qu
             act_renorm_scale=sweep_cfg["act_renorm_scale"],
             device=cfg.device,
             dtype=cfg.dtype,
-            lambda_reg=sweep_cfg["lambda_reg"],
             record_data=True,
         )
 
@@ -93,13 +96,16 @@ def create_trainer_worker(pidx: int, offset: int, sweep_cfgs: list[dict], act_qu
             lr=sweep_cfg["lr"],
             beta1=sweep_cfg["beta1"],
             beta2=sweep_cfg["beta2"],
+            l1_weight=sweep_cfg["l1_weight"],
             total_steps=cfg.total_activations // cfg.batch_size,
-            warmup_pct=sweep_cfg["warmup_percent"],
+            lr_warmup_pct=sweep_cfg["lr_warmup_pct"],
+            lr_decay_pct=sweep_cfg["lr_decay_pct"],
+            l1_warmup_pct=sweep_cfg["l1_warmup_pct"],
             wb_project=cfg.wb_project,
             wb_entity=cfg.wb_entity,
             wb_name="{}: ML_R{:.1e}_rt{}_rs{:g}_LR={:.1e}".format(
                 offset + pidx,
-                sweep_cfg["lambda_reg"],
+                sweep_cfg["l1_weight"],
                 sweep_cfg["act_renorm_type"],
                 sweep_cfg["act_renorm_scale"],
                 sweep_cfg["lr"],
@@ -119,7 +125,6 @@ def create_trainer_worker(pidx: int, offset: int, sweep_cfgs: list[dict], act_qu
             m_dim=cfg.m_dim,
             device=cfg.device,
             dtype=cfg.dtype,
-            lambda_reg=sweep_cfg["lambda_reg"],
             record_data=True,
         )
 
@@ -127,18 +132,18 @@ def create_trainer_worker(pidx: int, offset: int, sweep_cfgs: list[dict], act_qu
             lr=sweep_cfg["lr"],
             beta1=sweep_cfg["beta1"],
             beta2=sweep_cfg["beta2"],
+            l1_weight=sweep_cfg["l1_weight"],
             total_steps=cfg.total_activations // cfg.batch_size,
-            warmup_pct=sweep_cfg["warmup_percent"],
+            lr_warmup_pct=sweep_cfg["lr_warmup_pct"],
+            lr_decay_pct=sweep_cfg["lr_decay_pct"],
+            l1_warmup_pct=sweep_cfg["l1_warmup_pct"],
             wb_project=cfg.wb_project,
             wb_entity=cfg.wb_entity,
             wb_name="{}: L{}_R{:.1e}_LR={:.1e}".format(
                 offset + pidx,
                 sweep_cfg["layer"],
-                sweep_cfg["lambda_reg"],
-                sweep_cfg["lr"],
-                sweep_cfg["beta1"],
-                sweep_cfg["beta2"],
-                sweep_cfg["warmup_percent"],
+                sweep_cfg["l1_weight"],
+                sweep_cfg["lr"]
             ),
             wb_group=cfg.wb_group,
             wb_config={
@@ -180,16 +185,20 @@ class AutoEncoderSweeper:
                     "lr": lr,
                     "beta1": beta1,
                     "beta2": beta2,
-                    "lambda_reg": lambda_reg,
-                    "warmup_percent": warmup_percent,
+                    "l1_weight": l1_weight,
+                    "lr_warmup_pct": lr_warmup_pct,
+                    "lr_decay_pct": lr_decay_pct,
+                    "l1_warmup_pct": l1_warmup_pct,
                     "act_renorm_type": act_renorm_type,
                     "act_renorm_scale": act_renorm_scale,
                 }
                 for lr in cfg.lr
                 for beta1 in cfg.beta1
                 for beta2 in cfg.beta2
-                for lambda_reg in cfg.lambda_reg
-                for warmup_percent in cfg.warmup_percent
+                for l1_weight in cfg.l1_weight
+                for lr_warmup_pct in cfg.lr_warmup_pct
+                for lr_decay_pct in cfg.lr_decay_pct
+                for l1_warmup_pct in cfg.l1_warmup_pct
                 for act_renorm_type in cfg.act_renorm_type
                 for act_renorm_scale in cfg.act_renorm_scale
             ]
@@ -201,15 +210,19 @@ class AutoEncoderSweeper:
                     "lr": lr,
                     "beta1": beta1,
                     "beta2": beta2,
-                    "lambda_reg": lambda_reg,
-                    "warmup_percent": warmup_percent,
+                    "l1_weight": l1_weight,
+                    "lr_warmup_pct": lr_warmup_pct,
+                    "lr_decay_pct": lr_decay_pct,
+                    "l1_warmup_pct": l1_warmup_pct,
                     "layer": layer,
                 }
                 for lr in cfg.lr
                 for beta1 in cfg.beta1
                 for beta2 in cfg.beta2
-                for lambda_reg in cfg.lambda_reg
-                for warmup_percent in cfg.warmup_percent
+                for l1_weight in cfg.l1_weight
+                for lr_warmup_pct in cfg.lr_warmup_pct
+                for lr_decay_pct in cfg.lr_decay_pct
+                for l1_warmup_pct in cfg.l1_warmup_pct
                 for layer in cfg.layer  # layer is last so that it is always iterated over in adjacent cfgs, this speeds
                 # up the sweep since the full set activations from the model can always be used
             ]

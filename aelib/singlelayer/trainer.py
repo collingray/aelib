@@ -16,9 +16,11 @@ class AutoEncoderTrainerConfig:
     lr: the learning rate to use
     beta1: beta1 for adam
     beta2: beta2 for adam
+    l1_weight: the l1 loss weight
     total_steps: the total number of steps that will be taken by the lr scheduler, should be equal to the number of times train_on is called
-    warmup_pct: the percentage of steps to use for warmup
-    decay_pct: the percentage of steps to use for decay
+    lr_warmup_pct: the percentage of steps to use for warmup
+    lr_decay_pct: the percentage of steps to use for decay
+    l1_warmup_pct: the percentage of steps to use for l1 warmup
     wb_project: the wandb project to log to
     wb_entity: the wandb entity to log to
     wb_group: the wandb group to log to
@@ -27,9 +29,11 @@ class AutoEncoderTrainerConfig:
     lr: float
     beta1: float
     beta2: float
+    l1_weight: float
     total_steps: int
-    warmup_pct: float
-    decay_pct: float
+    lr_warmup_pct: float
+    lr_decay_pct: float
+    l1_warmup_pct: Optional[float]
     wb_project: str
     wb_entity: str
     wb_name: Optional[str] = None
@@ -46,7 +50,12 @@ class AutoEncoderTrainer:
 
     def __init__(self, encoder_cfg: AutoEncoderConfig, trainer_cfg: AutoEncoderTrainerConfig):
         self.cfg = trainer_cfg
-        self.steps = 0
+        self.step = 0
+
+        self.l1_weight = trainer_cfg.l1_weight if trainer_cfg.l1_warmup_pct is None else 0.0
+        self.l1_inc = 0.0
+        if trainer_cfg.l1_warmup_pct is not None:
+            self.l1_inc = trainer_cfg.l1_weight / (trainer_cfg.total_steps * trainer_cfg.l1_warmup_pct)
 
         self.encoder = AutoEncoder(encoder_cfg)
 
@@ -60,8 +69,8 @@ class AutoEncoderTrainer:
         self.scheduler = plateau_lr_scheduler(
             self.optimizer,
             total_steps=trainer_cfg.total_steps,
-            warmup_pct=trainer_cfg.warmup_pct,
-            decay_pct=trainer_cfg.decay_pct,
+            warmup_pct=trainer_cfg.lr_warmup_pct,
+            decay_pct=trainer_cfg.lr_decay_pct,
         )
 
         wandb.init(
@@ -74,15 +83,16 @@ class AutoEncoderTrainer:
         )
 
     def train_on(self, acts):
-        enc, loss, l1, mse = self.encoder(acts)
+        enc, loss, l1, mse = self.encoder(acts, self.l1_weight)
         loss.backward()
         self.optimizer.step()
         self.scheduler.step()
         self.optimizer.zero_grad()
 
-        self.steps += 1
+        self.step += 1
+        self.l1_weight = min(self.l1_weight + self.l1_inc, self.cfg.l1_weight)
 
-        if self.steps % self.cfg.steps_per_report == 0:
+        if self.step % self.cfg.steps_per_report == 0:
             if self.encoder.cfg.record_data:
                 freqs, avg_l0, avg_fvu = self.encoder.get_data()
                 freq_data = {

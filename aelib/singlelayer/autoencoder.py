@@ -19,7 +19,6 @@ class AutoEncoderConfig:
         seed: the seed to use for pytorch rng
         device: the device to use for the model
         dtype: the dtype to use for the model
-        lambda_reg: the regularization strength
         record_data: if True, a variety of data will be recorded during on forward passes, including neuron
         firing frequencies and the average FVU
         num_firing_buckets: the number of buckets to use for recording neuron firing
@@ -33,7 +32,6 @@ class AutoEncoderConfig:
     seed: Optional[int] = None
     device: str = "cuda"
     dtype: torch.dtype = torch.bfloat16
-    lambda_reg: float = 0.001
     record_data: bool = True
     num_firing_buckets: int = 16
     firing_bucket_size: int = 2 ** 18
@@ -90,10 +88,10 @@ class AutoEncoder(nn.Module):
         if cfg.record_data:
             self.register_data_buffers(cfg)
 
-    def forward(self, x, mean_over_batch=True):
+    def forward(self, x, lambda_reg: float, mean_over_batch=True):
         encoded = self.encode(x)
         reconstructed = self.decode(encoded)
-        loss, l1, mse = self.loss(x, reconstructed, encoded, self.cfg.lambda_reg, mean_over_batch=mean_over_batch)
+        loss, l1, mse = self.loss(x, reconstructed, encoded, lambda_reg, mean_over_batch=mean_over_batch)
 
         if self.cfg.record_data:
             mean_mse = mse if mean_over_batch else mse.mean(dim=0)

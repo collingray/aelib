@@ -17,9 +17,11 @@ class AutoEncoderMultiLayerTrainerConfig:
     lr: the learning rate to use
     beta1: beta1 for adam
     beta2: beta2 for adam
+    l1_weight: the l1 loss weight
     total_steps: the total number of steps that will be taken by the lr scheduler, should be equal to the number of times train_on is called
-    warmup_pct: the percentage of steps to use for warmup
-    decay_pct: the percentage of steps to use for decay
+    lr_warmup_pct: the percentage of steps to use for warmup
+    lr_decay_pct: the percentage of steps to use for decay
+    l1_warmup_pct: the percentage of steps to use for l1 warmup
     wb_project: the wandb project to log to
     wb_entity: the wandb entity to log to
     wb_group: the wandb group to log to
@@ -28,9 +30,11 @@ class AutoEncoderMultiLayerTrainerConfig:
     lr: float
     beta1: float
     beta2: float
+    l1_weight: float
     total_steps: int
-    warmup_pct: float
-    decay_pct: float
+    lr_warmup_pct: float
+    lr_decay_pct: float
+    l1_warmup_pct: Optional[float]
     steps_per_report: int = 128
     steps_per_resample: Optional[int] = None
     num_resamples: Optional[int] = None
@@ -49,7 +53,12 @@ class AutoEncoderMultiLayerTrainer:
 
     def __init__(self, encoder_cfg: AutoEncoderMultiLayerConfig, trainer_cfg: AutoEncoderMultiLayerTrainerConfig):
         self.cfg = trainer_cfg
-        self.steps = 0
+        self.step = 0
+
+        self.l1_weight = trainer_cfg.l1_weight if trainer_cfg.l1_warmup_pct is None else 0.0
+        self.l1_inc = 0.0
+        if trainer_cfg.l1_warmup_pct is not None:
+            self.l1_inc = trainer_cfg.l1_weight / (trainer_cfg.total_steps * trainer_cfg.l1_warmup_pct)
 
         self.encoder = AutoEncoderMultiLayer(encoder_cfg)
 
@@ -63,8 +72,8 @@ class AutoEncoderMultiLayerTrainer:
         self.scheduler = plateau_lr_scheduler(
             self.optimizer,
             total_steps=trainer_cfg.total_steps,
-            warmup_pct=trainer_cfg.warmup_pct,
-            decay_pct=trainer_cfg.decay_pct,
+            warmup_pct=trainer_cfg.lr_warmup_pct,
+            decay_pct=trainer_cfg.lr_decay_pct,
         )
 
         if trainer_cfg.wb_project is not None and trainer_cfg.wb_entity is not None:
@@ -78,22 +87,23 @@ class AutoEncoderMultiLayerTrainer:
             )
 
     def train_on(self, acts, buffer: Optional[ActivationsBuffer] = None):  # acts: [batch_size, num_layers, n_dim]
-        enc, loss, l1, mse = self.encoder(acts)  # loss: [num_layers]
+        enc, loss, l1, mse = self.encoder(acts, self.l1_weight)  # loss: [num_layers]
         loss.mean().backward()
         self.optimizer.step()
         self.scheduler.step()
         self.optimizer.zero_grad()
 
-        self.steps += 1
+        self.step += 1
+        self.l1_weight = min(self.l1_weight + self.l1_inc, self.cfg.l1_weight)
 
-        if (self.cfg.steps_per_resample and self.steps % self.cfg.steps_per_resample == 0) and (
-                not self.cfg.num_resamples or self.steps // self.cfg.steps_per_resample <= self.cfg.num_resamples):
+        if (self.cfg.steps_per_resample and self.step % self.cfg.steps_per_resample == 0) and (
+                not self.cfg.num_resamples or self.step // self.cfg.steps_per_resample <= self.cfg.num_resamples):
             assert buffer is not None, "Buffer must be provided to resample neurons"
 
             inputs = buffer.next(batch=2 ** 14).to(device=self.encoder.cfg.device)
             self.encoder.resample_neurons(inputs, batch_size=2 ** 12, optimizer=self.optimizer)
 
-        if self.steps % self.cfg.steps_per_report == 0:
+        if self.step % self.cfg.steps_per_report == 0:
             metrics = {}
 
             for layer in range(self.encoder.num_layers):
