@@ -2,6 +2,7 @@ from random import random
 
 import torch
 import torch.nn.functional as F
+import torch.optim.lr_scheduler as lr_scheduler
 
 
 class TiedLinear(torch.nn.Module):
@@ -47,3 +48,33 @@ def optimizer_to(optim, device):
 def truncate_seq(seq, max_length):
     offset = int(random() * (len(seq) - max_length))
     return seq[offset:offset + max_length]
+
+
+def plateau_lr_scheduler(
+        optim: torch.optim.Optimizer,
+        total_steps: int,
+        warmup_pct: float,
+        decay_pct: float,
+        start_factor=0.1,
+        end_factor=0.01
+):
+    """
+    A learning rate scheduler that starts with a warmup, then a plateau, then a decay
+
+    :param optim: the optimizer to use
+    :param total_steps: the total number of steps that will be taken
+    :param warmup_pct: the percentage of steps to use for warmup
+    :param decay_pct: the percentage of steps to use for decay
+    :param start_factor: the factor to start with for warmup
+    :param end_factor: the factor to end with for decay
+    """
+    return lr_scheduler.SequentialLR(
+        optimizer=optim,
+        schedulers=[
+            lr_scheduler.LinearLR(optimizer=optim, start_factor=start_factor, end_factor=1,
+                                  total_iters=int(total_steps * warmup_pct)),
+            lr_scheduler.LinearLR(optimizer=optim, start_factor=1, end_factor=end_factor,
+                                  total_iters=int(total_steps * decay_pct)),
+        ],
+        milestones=[int(total_steps * (1 - decay_pct))]
+    )

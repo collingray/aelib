@@ -1,9 +1,11 @@
+import json
+from dataclasses import dataclass
 from typing import List, Literal, Optional, Union
 
 import torch
 from overrides import overrides
 
-from autoencoder import *
+from ..autoencoder import AutoEncoder, AutoEncoderConfig
 
 
 @dataclass

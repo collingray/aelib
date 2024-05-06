@@ -5,8 +5,8 @@ import torch.optim.lr_scheduler
 import wandb
 
 from .autoencoder import AutoEncoderMultiLayer, AutoEncoderMultiLayerConfig
-from buffer import ActivationsBuffer
-from utils import *
+from ..buffer import ActivationsBuffer
+from ..utils import plateau_lr_scheduler
 
 
 @dataclass
@@ -18,7 +18,8 @@ class AutoEncoderMultiLayerTrainerConfig:
     beta1: beta1 for adam
     beta2: beta2 for adam
     total_steps: the total number of steps that will be taken by the lr scheduler, should be equal to the number of times train_on is called
-    warmup_percent: the percentage of steps to use for warmup
+    warmup_pct: the percentage of steps to use for warmup
+    decay_pct: the percentage of steps to use for decay
     wb_project: the wandb project to log to
     wb_entity: the wandb entity to log to
     wb_group: the wandb group to log to
@@ -28,7 +29,8 @@ class AutoEncoderMultiLayerTrainerConfig:
     beta1: float
     beta2: float
     total_steps: int
-    warmup_percent: float
+    warmup_pct: float
+    decay_pct: float
     steps_per_report: int = 128
     steps_per_resample: Optional[int] = None
     num_resamples: Optional[int] = None
@@ -58,11 +60,11 @@ class AutoEncoderMultiLayerTrainer:
             foreach=False
         )
 
-        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        self.scheduler = plateau_lr_scheduler(
             self.optimizer,
-            max_lr=trainer_cfg.lr,
             total_steps=trainer_cfg.total_steps,
-            pct_start=trainer_cfg.warmup_percent
+            warmup_pct=trainer_cfg.warmup_pct,
+            decay_pct=trainer_cfg.decay_pct,
         )
 
         wandb.init(

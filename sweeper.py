@@ -94,7 +94,7 @@ def create_trainer_worker(pidx: int, offset: int, sweep_cfgs: list[dict], act_qu
             beta1=sweep_cfg["beta1"],
             beta2=sweep_cfg["beta2"],
             total_steps=cfg.total_activations // cfg.batch_size,
-            warmup_percent=sweep_cfg["warmup_percent"],
+            warmup_pct=sweep_cfg["warmup_percent"],
             wb_project=cfg.wb_project,
             wb_entity=cfg.wb_entity,
             wb_name="{}: ML_R{:.1e}_rt{}_rs{:g}_LR={:.1e}".format(
@@ -103,7 +103,7 @@ def create_trainer_worker(pidx: int, offset: int, sweep_cfgs: list[dict], act_qu
                 sweep_cfg["act_renorm_type"],
                 sweep_cfg["act_renorm_scale"],
                 sweep_cfg["lr"],
-                ),
+            ),
             wb_group=cfg.wb_group,
             wb_config={
                 **(cfg.wb_config or {}),
@@ -128,7 +128,7 @@ def create_trainer_worker(pidx: int, offset: int, sweep_cfgs: list[dict], act_qu
             beta1=sweep_cfg["beta1"],
             beta2=sweep_cfg["beta2"],
             total_steps=cfg.total_activations // cfg.batch_size,
-            warmup_percent=sweep_cfg["warmup_percent"],
+            warmup_pct=sweep_cfg["warmup_percent"],
             wb_project=cfg.wb_project,
             wb_entity=cfg.wb_entity,
             wb_name="{}: L{}_R{:.1e}_LR={:.1e}".format(
@@ -139,7 +139,7 @@ def create_trainer_worker(pidx: int, offset: int, sweep_cfgs: list[dict], act_qu
                 sweep_cfg["beta1"],
                 sweep_cfg["beta2"],
                 sweep_cfg["warmup_percent"],
-                ),
+            ),
             wb_group=cfg.wb_group,
             wb_config={
                 **(cfg.wb_config or {}),
