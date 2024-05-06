@@ -1,8 +1,11 @@
 import multiprocessing
+from dataclasses import dataclass
 from typing import List, Optional, Literal
 
-from autoencoder_trainer import *
-from autoencoder_multilayer_trainer import *
+from autoencoder import AutoEncoder, AutoEncoderConfig
+from trainer import AutoEncoderTrainer, AutoEncoderTrainerConfig
+from multilayer.autoencoder import AutoEncoderMultiLayer, AutoEncoderMultiLayerConfig
+from multilayer.trainer import AutoEncoderMultiLayerTrainer, AutoEncoderMultiLayerTrainerConfig
 from buffer import *
 from tqdm.autonotebook import tqdm
 from utils import *

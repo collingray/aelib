@@ -4,7 +4,7 @@ from typing import Optional, List, Literal
 import torch.optim.lr_scheduler
 import wandb
 
-from autoencoder_multilayer import *
+from .autoencoder import AutoEncoderMultiLayer, AutoEncoderMultiLayerConfig
 from buffer import ActivationsBuffer
 from utils import *
 
