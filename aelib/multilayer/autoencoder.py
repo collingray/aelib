@@ -5,7 +5,7 @@ from typing import List, Literal, Optional, Union
 import torch
 from overrides import overrides
 
-from ..autoencoder import AutoEncoder, AutoEncoderConfig
+from ..singlelayer import AutoEncoder, AutoEncoderConfig
 
 
 @dataclass

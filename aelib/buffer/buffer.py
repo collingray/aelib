@@ -5,7 +5,7 @@ from tqdm.autonotebook import tqdm
 from multiprocessing import Pool
 import gc
 
-from utils import truncate_seq
+from ..utils import truncate_seq
 
 
 class ActivationsBufferConfig:

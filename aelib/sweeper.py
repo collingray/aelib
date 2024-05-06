@@ -2,19 +2,19 @@ import multiprocessing
 from dataclasses import dataclass
 from typing import List, Optional, Literal
 
-from autoencoder import AutoEncoder, AutoEncoderConfig
-from trainer import AutoEncoderTrainer, AutoEncoderTrainerConfig
-from multilayer.autoencoder import AutoEncoderMultiLayer, AutoEncoderMultiLayerConfig
-from multilayer.trainer import AutoEncoderMultiLayerTrainer, AutoEncoderMultiLayerTrainerConfig
-from buffer import *
 from tqdm.autonotebook import tqdm
-from utils import *
 import gc
 import torch.multiprocessing
 from torch.multiprocessing import JoinableQueue as Queue, spawn
 import logging
 import sys
 import traceback
+
+from .singlelayer.autoencoder import AutoEncoder, AutoEncoderConfig
+from .singlelayer.trainer import AutoEncoderTrainer, AutoEncoderTrainerConfig
+from .multilayer.autoencoder import AutoEncoderMultiLayer, AutoEncoderMultiLayerConfig
+from .multilayer.trainer import AutoEncoderMultiLayerTrainer, AutoEncoderMultiLayerTrainerConfig
+from .buffer import ActivationsBuffer
 
 
 @dataclass

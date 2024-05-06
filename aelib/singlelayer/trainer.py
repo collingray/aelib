@@ -4,8 +4,8 @@ from typing import Optional
 import torch.optim.lr_scheduler
 import wandb
 
-from autoencoder import AutoEncoder, AutoEncoderConfig
-from utils import plateau_lr_scheduler
+from .autoencoder import AutoEncoder, AutoEncoderConfig
+from ..utils import plateau_lr_scheduler
 
 
 @dataclass

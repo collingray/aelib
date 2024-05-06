@@ -3,5 +3,5 @@ overrides
 setuptools
 torch
 tqdm
-transformer_lens
+transformer-lens
 wandb
