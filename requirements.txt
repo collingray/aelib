@@ -1,7 +1,7 @@
-datasets==2.18.0
-overrides==7.4.0
-setuptools==68.2.2
-torch==2.1.2
-tqdm==4.65.0
+datasets
+overrides
+setuptools
+torch
+tqdm
 transformer_lens
-wandb==0.16.1
+wandb
