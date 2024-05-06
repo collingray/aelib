@@ -67,14 +67,15 @@ class AutoEncoderMultiLayerTrainer:
             decay_pct=trainer_cfg.decay_pct,
         )
 
-        wandb.init(
-            project=trainer_cfg.wb_project,
-            entity=trainer_cfg.wb_entity,
-            name=trainer_cfg.wb_name,
-            group=trainer_cfg.wb_group,
-            config=trainer_cfg.wb_config,
-            settings=wandb.Settings(disable_job_creation=True)
-        )
+        if trainer_cfg.wb_project is not None and trainer_cfg.wb_entity is not None:
+            wandb.init(
+                project=trainer_cfg.wb_project,
+                entity=trainer_cfg.wb_entity,
+                name=trainer_cfg.wb_name,
+                group=trainer_cfg.wb_group,
+                config=trainer_cfg.wb_config,
+                settings=wandb.Settings(disable_job_creation=True)
+            )
 
     def train_on(self, acts, buffer: Optional[ActivationsBuffer] = None):  # acts: [batch_size, num_layers, n_dim]
         enc, loss, l1, mse = self.encoder(acts)  # loss: [num_layers]
