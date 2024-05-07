@@ -75,22 +75,24 @@ class AutoEncoder(nn.Module):
             torch.manual_seed(cfg.seed)
 
         # encoder linear layer, goes from the models embedding space to the hidden layer
-        self.encoder = nn.Linear(cfg.n_dim, cfg.m_dim, bias=False, device=cfg.device, dtype=cfg.dtype)
+        self.encoder = nn.Linear(cfg.n_dim, cfg.m_dim, bias=False, dtype=cfg.dtype)
         # bias applied after encoding
-        self.encoder_bias = nn.Parameter(torch.zeros(cfg.m_dim, device=cfg.device, dtype=cfg.dtype))
+        self.encoder_bias = nn.Parameter(torch.zeros(cfg.m_dim, dtype=cfg.dtype))
         self.relu = nn.ReLU()
         # decoder linear layer, goes from the hidden layer back to models embeddings
         if cfg.tied:
             self.decoder = TiedLinear(self.encoder)  # tied weights, uses same dtype/device as encoder
         else:
-            self.decoder = nn.Linear(cfg.m_dim, cfg.n_dim, bias=False, device=cfg.device, dtype=cfg.dtype)
+            self.decoder = nn.Linear(cfg.m_dim, cfg.n_dim, bias=False, dtype=cfg.dtype)
         # bias applied after decoding
-        self.decoder_bias = nn.Parameter(torch.zeros(cfg.n_dim, device=cfg.device, dtype=cfg.dtype))
+        self.decoder_bias = nn.Parameter(torch.zeros(cfg.n_dim, dtype=cfg.dtype))
 
-        init_decoder_w = torch.rand(cfg.n_dim, cfg.m_dim)
+        init_decoder_w = torch.rand(cfg.n_dim, cfg.m_dim, dtype=cfg.dtype)
         init_decoder_w = 0.1 * init_decoder_w / init_decoder_w.norm(dim=0, p=2)
         self.decoder.weight.data = init_decoder_w
         self.encoder.weight.data = self.decoder.weight.T
+
+        self.to(cfg.device)
 
         if cfg.record_data:
             self.register_data_buffers(cfg)
