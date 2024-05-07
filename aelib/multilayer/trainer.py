@@ -93,7 +93,7 @@ class AutoEncoderMultiLayerTrainer:
             )
 
     def train_on(self, acts, buffer: Optional[ActivationsBuffer] = None):  # acts: [batch_size, num_layers, n_dim]
-        enc, loss, l1, mse = self.encoder(acts, self.l1_weight)  # loss: [num_layers]
+        enc, loss, l1, mse = self.encoder(acts, self.l1_weight, decoder_norm_scale=self.cfg.decoder_norm_scale)
         loss.mean().backward()
         self.optimizer.step()
         self.scheduler.step()
