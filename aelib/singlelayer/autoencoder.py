@@ -111,11 +111,8 @@ class AutoEncoder(nn.Module):
     def decode(self, x):
         return self.decoder(x) + self.pre_encoder_bias
 
-    def loss(self, x, x_out, latent, lamb, decoder_norm_scale, mean_over_batch=True):
-        l1 = self.normalized_l1(x, latent, mean_over_batch=mean_over_batch)
-        if decoder_norm_scale:
-            l1 = l1 * self.decoder.weight.norm(dim=0, p=2)
-
+    def loss(self, x, x_out, latent, lamb, decoder_norm_scale=False, mean_over_batch=True):
+        l1 = self.normalized_l1(x, latent, decoder_norm_scale=decoder_norm_scale, mean_over_batch=mean_over_batch)
         mse = self.normalized_reconstruction_mse(x, x_out, mean_over_batch=mean_over_batch)
         total = (lamb * l1) + mse
 
@@ -153,8 +150,7 @@ class AutoEncoder(nn.Module):
         mse = ((x - recons) ** 2).mean(dim=-1) / (x ** 2).mean(dim=-1)
         return mse.mean(dim=0) if mean_over_batch else mse
 
-    @staticmethod
-    def normalized_l1(x, latent, mean_over_batch=True):
+    def normalized_l1(self, x, latent, decoder_norm_scale, mean_over_batch):
         """
         The L1 norm of the latent representation, normalized by the L2 norm of the input, averaged over the batch.
 
@@ -164,6 +160,9 @@ class AutoEncoder(nn.Module):
         Or
         [batch, layer, n_dim], [batch, layer, m_dim] -> [layer]
         """
+        if decoder_norm_scale:
+            latent = latent * self.decoder.weight.norm(dim=0, p=2)
+
         l1 = latent.norm(dim=-1, p=1) / x.norm(dim=-1, p=2)
         return l1.mean(dim=0) if mean_over_batch else l1
 
