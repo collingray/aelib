@@ -72,7 +72,6 @@ class AutoEncoderMultiLayerTrainer:
             self.encoder.parameters(),
             lr=trainer_cfg.lr,
             betas=(trainer_cfg.beta1, trainer_cfg.beta2),
-            foreach=False
         )
 
         self.scheduler = plateau_lr_scheduler(

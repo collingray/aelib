@@ -74,16 +74,23 @@ class AutoEncoder(nn.Module):
         if cfg.seed:
             torch.manual_seed(cfg.seed)
 
-        self.pre_encoder_bias = nn.Parameter(torch.zeros(cfg.n_dim, device=cfg.device, dtype=cfg.dtype))
         # encoder linear layer, goes from the models embedding space to the hidden layer
         self.encoder = nn.Linear(cfg.n_dim, cfg.m_dim, bias=False, device=cfg.device, dtype=cfg.dtype)
-        self.pre_activation_bias = nn.Parameter(torch.zeros(cfg.m_dim, device=cfg.device, dtype=cfg.dtype))
+        # bias applied after encoding
+        self.encoder_bias = nn.Parameter(torch.zeros(cfg.m_dim, device=cfg.device, dtype=cfg.dtype))
         self.relu = nn.ReLU()
         # decoder linear layer, goes from the hidden layer back to models embeddings
         if cfg.tied:
             self.decoder = TiedLinear(self.encoder)  # tied weights, uses same dtype/device as encoder
         else:
             self.decoder = nn.Linear(cfg.m_dim, cfg.n_dim, bias=False, device=cfg.device, dtype=cfg.dtype)
+        # bias applied after decoding
+        self.decoder_bias = nn.Parameter(torch.zeros(cfg.n_dim, device=cfg.device, dtype=cfg.dtype))
+
+        init_decoder_w = torch.rand(cfg.n_dim, cfg.m_dim)
+        init_decoder_w = 0.1 * init_decoder_w / init_decoder_w.norm(dim=0, p=2)
+        self.decoder.weight.data = init_decoder_w
+        self.encoder.weight.data = self.decoder.weight.T
 
         if cfg.record_data:
             self.register_data_buffers(cfg)
@@ -100,8 +107,7 @@ class AutoEncoder(nn.Module):
         return encoded, loss, l1, mse
 
     def encode(self, x, record=True):
-        x = x - self.pre_encoder_bias
-        x = self.relu(self.encoder(x) + self.pre_activation_bias)
+        x = self.relu(self.encoder(x) + self.encoder_bias)
 
         if self.cfg.record_data and record:
             self.record_firing_data(x)
@@ -109,7 +115,7 @@ class AutoEncoder(nn.Module):
         return x
 
     def decode(self, x):
-        return self.decoder(x) + self.pre_encoder_bias
+        return self.decoder(x) + self.decoder_bias
 
     def loss(self, x, x_out, latent, lamb, decoder_norm_scale=False, mean_over_batch=True):
         l1 = self.normalized_l1(x, latent, decoder_norm_scale=decoder_norm_scale, mean_over_batch=mean_over_batch)
@@ -129,11 +135,11 @@ class AutoEncoder(nn.Module):
 
     @property
     def b_enc(self):
-        return self.pre_activation_bias
+        return self.encoder_bias
 
     @property
     def b_dec(self):
-        return self.pre_encoder_bias
+        return self.decoder_bias
 
     @staticmethod
     def normalized_reconstruction_mse(x, recons, mean_over_batch=True):
@@ -210,7 +216,7 @@ class AutoEncoder(nn.Module):
             self.decoder.weight[:, dead_neuron_idxs] = sampled_inputs.T
 
             # Set the biases of the dead neurons to 0
-            self.pre_activation_bias[dead_neuron_idxs] = 0
+            self.encoder_bias[dead_neuron_idxs] = 0
 
             # Reset optimizer params for changed weights/biases
             optim_state = optimizer.state_dict()["state"]
