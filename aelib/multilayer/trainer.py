@@ -22,8 +22,13 @@ class AutoEncoderMultiLayerTrainerConfig:
     lr_warmup_pct: the percentage of steps to use for warmup
     lr_decay_pct: the percentage of steps to use for decay
     l1_warmup_pct: the percentage of steps to use for l1 warmup
+    steps_per_report: the number of steps between each report
+    steps_per_resample: the number of steps between each resample, or None to disable resampling
+    num_resamples: the number of resamples to perform
+    decoder_norm_scale: whether to scale the sparsity loss by the l2 norm of the decoder weights
     wb_project: the wandb project to log to
     wb_entity: the wandb entity to log to
+    wb_name: the wandb run name
     wb_group: the wandb group to log to
     wb_config: the wandb config to log
     """
@@ -38,6 +43,7 @@ class AutoEncoderMultiLayerTrainerConfig:
     steps_per_report: int = 128
     steps_per_resample: Optional[int] = None
     num_resamples: Optional[int] = None
+    decoder_norm_scale: bool = False
     wb_project: Optional[str] = None
     wb_entity: Optional[str] = None
     wb_name: Optional[str] = None
@@ -122,11 +128,9 @@ class AutoEncoderMultiLayerTrainer:
                         "avg_fvu": avg_fvu[layer]
                     })
 
-                metrics.update({
-                    "feature_density": wandb.Histogram(freqs.mean(dim=0).log10().nan_to_num(neginf=-10).cpu()),
-                    "avg_l0": avg_l0.mean(),
-                    "avg_fvu": avg_fvu.mean()
-                })
+                metrics["total"] = {
+                    "feature_density": wandb.Histogram(freqs.mean(dim=0).log10().nan_to_num(neginf=-10).cpu())
+                }
 
             wandb.log({
                 "lr": self.scheduler.get_last_lr()[0],

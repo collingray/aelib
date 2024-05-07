@@ -88,10 +88,10 @@ class AutoEncoder(nn.Module):
         if cfg.record_data:
             self.register_data_buffers(cfg)
 
-    def forward(self, x, lambda_reg: float, mean_over_batch=True):
+    def forward(self, x, lamb: float, decoder_norm_scale=False, mean_over_batch=True):
         encoded = self.encode(x)
         reconstructed = self.decode(encoded)
-        loss, l1, mse = self.loss(x, reconstructed, encoded, lambda_reg, mean_over_batch=mean_over_batch)
+        loss, l1, mse = self.loss(x, reconstructed, encoded, lamb, decoder_norm_scale, mean_over_batch=mean_over_batch)
 
         if self.cfg.record_data:
             mean_mse = mse if mean_over_batch else mse.mean(dim=0)
@@ -111,10 +111,13 @@ class AutoEncoder(nn.Module):
     def decode(self, x):
         return self.decoder(x) + self.pre_encoder_bias
 
-    def loss(self, x, x_out, latent, lambda_reg, mean_over_batch=True):
+    def loss(self, x, x_out, latent, lamb, decoder_norm_scale, mean_over_batch=True):
         l1 = self.normalized_l1(x, latent, mean_over_batch=mean_over_batch)
+        if decoder_norm_scale:
+            l1 = l1 * self.decoder.weight.norm(dim=0, p=2)
+
         mse = self.normalized_reconstruction_mse(x, x_out, mean_over_batch=mean_over_batch)
-        total = (lambda_reg * l1) + mse
+        total = (lamb * l1) + mse
 
         return total, l1, mse
 
@@ -184,7 +187,8 @@ class AutoEncoder(nn.Module):
             print(f"Resampling {len(dead_neuron_idxs)} dead neurons")
 
             square_input_losses = torch.cat(
-                [self.forward(inputs[i:i + batch_size], mean_over_batch=False)[1] for i in range(0, len(inputs), batch_size)]
+                [self.forward(inputs[i:i + batch_size], mean_over_batch=False)[1] for i in
+                 range(0, len(inputs), batch_size)]
             ) ** 2
 
             inputs = inputs.view(-1, self.cfg.n_dim)
