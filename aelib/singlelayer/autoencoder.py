@@ -97,13 +97,22 @@ class AutoEncoder(nn.Module):
         if cfg.record_data:
             self.register_data_buffers(cfg)
 
-    def forward(self, x, lamb: float, decoder_norm_scale=False, mean_over_batch=True):
+    def forward(self, x, lamb, input_scale=False, decoder_norm=False, mean_batch=True, latent_p=1):
         encoded = self.encode(x)
         reconstructed = self.decode(encoded)
-        loss, l1, mse = self.loss(x, reconstructed, encoded, lamb, decoder_norm_scale, mean_over_batch=mean_over_batch)
+        loss, l1, mse = self.loss(
+            x,
+            reconstructed,
+            encoded,
+            lamb,
+            input_scale,
+            decoder_norm,
+            mean_batch,
+            latent_p
+        )
 
         if self.cfg.record_data:
-            mean_mse = mse if mean_over_batch else mse.mean(dim=0)
+            mean_mse = mse if mean_batch else mse.mean(dim=0)
             self.record_fvu_data(x, mean_mse)
 
         return encoded, loss, l1, mse
@@ -119,9 +128,9 @@ class AutoEncoder(nn.Module):
     def decode(self, x):
         return self.decoder(x) + self.decoder_bias
 
-    def loss(self, x, x_out, latent, lamb, decoder_norm_scale=False, mean_over_batch=True):
-        l1 = self.normalized_l1(x, latent, decoder_norm_scale=decoder_norm_scale, mean_over_batch=mean_over_batch)
-        mse = self.normalized_reconstruction_mse(x, x_out, mean_over_batch=mean_over_batch)
+    def loss(self, x, x_out, latent, lamb, input_scale, decoder_norm, mean_batch, latent_p):
+        l1 = self.latent_norm(x, latent, latent_p, input_scale, decoder_norm, mean_batch)
+        mse = self.recons(x, x_out, input_scale, mean_batch)
         total = (lamb * l1) + mse
 
         return total, l1, mse
@@ -144,7 +153,7 @@ class AutoEncoder(nn.Module):
         return self.decoder_bias
 
     @staticmethod
-    def normalized_reconstruction_mse(x, recons, mean_over_batch=True):
+    def recons(x, recons, input_ms, mean_batch):
         """
         The MSE between the input and its reconstruction, normalized by the mean square of the input, averaged over the
         batch.
@@ -154,25 +163,45 @@ class AutoEncoder(nn.Module):
         [batch, n_dim]*2 -> []
         Or
         [batch, layer, n_dim]*2 -> [layer]
-        """
-        mse = ((x - recons) ** 2).mean(dim=-1) / (x ** 2).mean(dim=-1)
-        return mse.mean(dim=0) if mean_over_batch else mse
 
-    def normalized_l1(self, x, latent, decoder_norm_scale, mean_over_batch):
+        :param x: the input
+        :param recons: the reconstruction
+        :param input_ms: whether to normalize the MSE by the mean square of the input
+        :param mean_batch: whether to average over the batch
         """
-        The L1 norm of the latent representation, normalized by the L2 norm of the input, averaged over the batch.
+        mse = ((x - recons) ** 2).mean(dim=-1)
+
+        if input_ms:
+            mse = mse / (x ** 2).mean(dim=-1)
+
+        return mse.mean(dim=0) if mean_batch else mse
+
+    def latent_norm(self, x, latent, p, input_norm, decoder_norm, mean_batch):
+        """
+        The Lp norm of the latent representation
 
         [n_dim], [m_dim] -> []
         Or
         [batch, n_dim], [batch, m_dim] -> []
         Or
         [batch, layer, n_dim], [batch, layer, m_dim] -> [layer]
+
+        :param x: the input
+        :param latent: the latent representation
+        :param input_norm: whether to scale the Lp norm of the latent representation by the L2 norm of the input
+        :param decoder_norm: whether to scale the latent representation by the L2 norm of the decoder weights
+        :param mean_batch: whether to average over the batch
         """
-        if decoder_norm_scale:
+
+        if decoder_norm:
             latent = latent * self.decoder.weight.norm(dim=0, p=2)
 
-        l1 = latent.norm(dim=-1, p=1) / x.norm(dim=-1, p=2)
-        return l1.mean(dim=0) if mean_over_batch else l1
+        n = latent.norm(dim=-1, p=p)
+
+        if input_norm:
+            n = n / x.norm(dim=-1, p=2)
+
+        return n.mean(dim=0) if mean_batch else n
 
     def resample_neurons(self, inputs, batch_size, optimizer):
         """
@@ -194,7 +223,7 @@ class AutoEncoder(nn.Module):
             print(f"Resampling {len(dead_neuron_idxs)} dead neurons")
 
             square_input_losses = torch.cat(
-                [self.forward(inputs[i:i + batch_size], mean_over_batch=False)[1] for i in
+                [self.forward(inputs[i:i + batch_size], mean_batch=False)[1] for i in
                  range(0, len(inputs), batch_size)]
             ) ** 2
 
