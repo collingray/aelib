@@ -25,12 +25,15 @@ class AutoEncoderSweeperConfig:
     n_dim: the dimension of the input
     m_dim: the dimension of the hidden layer
     lr: the learning rate to use
-    beta1: beta1 for adam
-    beta2: beta2 for adam
-    l1_weight: the l1 loss weight
-    lr_warmup_pct: the percentage of steps to use for warmup
-    lr_decay_pct: the percentage of steps to use for decay
-    l1_warmup_pct: the percentage of steps to use for l1 warmup
+    β1: beta1 for adam
+    β2: beta2 for adam
+    λ: the sparsity loss weight
+    lr_warmup_pct: the percentage of total steps to use for lr warmup
+    lr_decay_pct: the percentage of total steps to use for lr decay
+    λ_warmup_pct: the percentage of total steps to spend warming up λ
+    input_scale: whether to scale the loss terms by values of the input activations
+    decoder_scale: whether to scale the latent activations by the L2 norms of the decoder vectors
+    latent_p: the p value to use for the sparsity loss
     dtype: the dtype to use for the model and autoencoder
     device: the device to use for the model and autoencoder
     layer: the layer of the model to train the autoencoder on (0-indexed)
@@ -52,14 +55,17 @@ class AutoEncoderSweeperConfig:
     n_dim: int
     m_dim: int
     lr: List[float]
-    beta1: List[float]
-    beta2: List[float]
-    l1_weight: List[float]
+    β1: List[float]
+    β2: List[float]
+    λ: List[float]
     lr_warmup_pct: List[float]
     lr_decay_pct: List[float]
-    l1_warmup_pct: List[Optional[float]]
+    λ_warmup_pct: List[Optional[float]]
+    input_scale: List[bool]
+    decoder_scale: List[bool]
+    latent_p: List[float]
     layer: List[int]
-    act_norms: Optional[List[float]]
+    act_norms: Optional[List[float] | int]
     act_renorm_type: List[Literal["linear", "sqrt", "log", "none"]]
     act_renorm_scale: List[float]
     wb_project: str
@@ -94,13 +100,16 @@ def create_trainer_worker(pidx: int, offset: int, sweep_cfgs: list[dict], act_qu
 
         trainer_cfg = AutoEncoderMultiLayerTrainerConfig(
             lr=sweep_cfg["lr"],
-            beta1=sweep_cfg["beta1"],
-            beta2=sweep_cfg["beta2"],
-            l1_weight=sweep_cfg["l1_weight"],
+            β1=sweep_cfg["beta1"],
+            β2=sweep_cfg["beta2"],
+            λ=sweep_cfg["l1_weight"],
             total_steps=cfg.total_activations // cfg.batch_size,
             lr_warmup_pct=sweep_cfg["lr_warmup_pct"],
             lr_decay_pct=sweep_cfg["lr_decay_pct"],
-            l1_warmup_pct=sweep_cfg["l1_warmup_pct"],
+            λ_warmup_pct=sweep_cfg["l1_warmup_pct"],
+            input_scale=sweep_cfg["input_scale"],
+            decoder_scale=sweep_cfg["decoder_scale"],
+            latent_p=sweep_cfg["latent_p"],
             wb_project=cfg.wb_project,
             wb_entity=cfg.wb_entity,
             wb_name="{}: ML_R{:.1e}_rt{}_rs{:g}_LR={:.1e}".format(
@@ -183,22 +192,28 @@ class AutoEncoderSweeper:
             self.sweep_cfgs = [
                 {
                     "lr": lr,
-                    "beta1": beta1,
-                    "beta2": beta2,
-                    "l1_weight": l1_weight,
+                    "beta1": β1,
+                    "beta2": β2,
+                    "l1_weight": λ,
                     "lr_warmup_pct": lr_warmup_pct,
                     "lr_decay_pct": lr_decay_pct,
-                    "l1_warmup_pct": l1_warmup_pct,
+                    "l1_warmup_pct": λ_warmup_pct,
+                    "input_scale": input_scale,
+                    "decoder_scale": decoder_scale,
+                    "latent_p": latent_p,
                     "act_renorm_type": act_renorm_type,
                     "act_renorm_scale": act_renorm_scale,
                 }
                 for lr in cfg.lr
-                for beta1 in cfg.beta1
-                for beta2 in cfg.beta2
-                for l1_weight in cfg.l1_weight
+                for β1 in cfg.β1
+                for β2 in cfg.β2
+                for λ in cfg.λ
                 for lr_warmup_pct in cfg.lr_warmup_pct
                 for lr_decay_pct in cfg.lr_decay_pct
-                for l1_warmup_pct in cfg.l1_warmup_pct
+                for λ_warmup_pct in cfg.λ_warmup_pct
+                for input_scale in cfg.input_scale
+                for decoder_scale in cfg.decoder_scale
+                for latent_p in cfg.latent_p
                 for act_renorm_type in cfg.act_renorm_type
                 for act_renorm_scale in cfg.act_renorm_scale
             ]
@@ -217,12 +232,12 @@ class AutoEncoderSweeper:
                     "layer": layer,
                 }
                 for lr in cfg.lr
-                for beta1 in cfg.beta1
-                for beta2 in cfg.beta2
-                for l1_weight in cfg.l1_weight
+                for beta1 in cfg.β1
+                for beta2 in cfg.β2
+                for l1_weight in cfg.λ
                 for lr_warmup_pct in cfg.lr_warmup_pct
                 for lr_decay_pct in cfg.lr_decay_pct
-                for l1_warmup_pct in cfg.l1_warmup_pct
+                for l1_warmup_pct in cfg.λ_warmup_pct
                 for layer in cfg.layer  # layer is last so that it is always iterated over in adjacent cfgs, this speeds
                 # up the sweep since the full set activations from the model can always be used
             ]

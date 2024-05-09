@@ -15,17 +15,19 @@ class AutoEncoderMultiLayerTrainerConfig:
     The configuration for the `AutoEncoderMultiLayerTrainer` class
 
     lr: the learning rate to use
-    beta1: beta1 for adam
-    beta2: beta2 for adam
-    l1_weight: the l1 loss weight
+    β1: beta1 for adam
+    β2: beta2 for adam
+    λ: the sparsity loss weight
     total_steps: the total number of steps that will be taken by the lr scheduler, should be equal to the number of times train_on is called
-    lr_warmup_pct: the percentage of steps to use for warmup
-    lr_decay_pct: the percentage of steps to use for decay
-    l1_warmup_pct: the percentage of steps to use for l1 warmup
+    lr_warmup_pct: the percentage of total steps to use for lr warmup
+    lr_decay_pct: the percentage of total steps to use for lr decay
+    λ_warmup_pct: the percentage of total steps to spend warming up λ
     steps_per_report: the number of steps between each report
     steps_per_resample: the number of steps between each resample, or None to disable resampling
     num_resamples: the number of resamples to perform
-    decoder_norm_scale: whether to scale the sparsity loss by the l2 norm of the decoder weights
+    input_scale: whether to scale the loss terms by values of the input activations
+    decoder_scale: whether to scale the latent activations by the L2 norms of the decoder vectors
+    latent_p: the p value to use for the sparsity loss
     wb_project: the wandb project to log to
     wb_entity: the wandb entity to log to
     wb_name: the wandb run name
@@ -33,17 +35,19 @@ class AutoEncoderMultiLayerTrainerConfig:
     wb_config: the wandb config to log
     """
     lr: float
-    beta1: float
-    beta2: float
-    l1_weight: float
+    β1: float
+    β2: float
+    λ: float
     total_steps: int
     lr_warmup_pct: float
     lr_decay_pct: float
-    l1_warmup_pct: Optional[float]
+    λ_warmup_pct: Optional[float]
     steps_per_report: int = 128
     steps_per_resample: Optional[int] = None
     num_resamples: Optional[int] = None
-    decoder_norm_scale: bool = False
+    input_scale: bool = False
+    decoder_scale: bool = False
+    latent_p: float = 1.
     wb_project: Optional[str] = None
     wb_entity: Optional[str] = None
     wb_name: Optional[str] = None
@@ -61,17 +65,17 @@ class AutoEncoderMultiLayerTrainer:
         self.cfg = trainer_cfg
         self.step = 0
 
-        self.l1_weight = trainer_cfg.l1_weight if trainer_cfg.l1_warmup_pct is None else 0.0
-        self.l1_inc = 0.0
-        if trainer_cfg.l1_warmup_pct is not None:
-            self.l1_inc = trainer_cfg.l1_weight / (trainer_cfg.total_steps * trainer_cfg.l1_warmup_pct)
+        self.λ = trainer_cfg.λ if trainer_cfg.λ_warmup_pct is None else 0.0
+        self.dλ = 0.0
+        if trainer_cfg.λ_warmup_pct is not None:
+            self.dλ = trainer_cfg.λ / (trainer_cfg.total_steps * trainer_cfg.λ_warmup_pct)
 
         self.encoder = AutoEncoderMultiLayer(encoder_cfg)
 
         self.optimizer = torch.optim.Adam(
             self.encoder.parameters(),
             lr=trainer_cfg.lr,
-            betas=(trainer_cfg.beta1, trainer_cfg.beta2),
+            betas=(trainer_cfg.β1, trainer_cfg.β2),
         )
 
         self.scheduler = plateau_lr_scheduler(
@@ -92,14 +96,20 @@ class AutoEncoderMultiLayerTrainer:
             )
 
     def train_on(self, acts, buffer: Optional[ActivationsBuffer] = None):  # acts: [batch_size, num_layers, n_dim]
-        enc, loss, l1, mse = self.encoder(acts, self.l1_weight, decoder_norm_scale=self.cfg.decoder_norm_scale)
+        enc, loss, l1, mse = self.encoder(
+            acts,
+            self.λ,
+            input_scale=self.cfg.input_scale,
+            decoder_scale=self.cfg.decoder_scale,
+            latent_p=self.cfg.latent_p
+        )
         loss.mean().backward()
         self.optimizer.step()
         self.scheduler.step()
         self.optimizer.zero_grad()
 
         self.step += 1
-        self.l1_weight = min(self.l1_weight + self.l1_inc, self.cfg.l1_weight)
+        self.λ = min(self.λ + self.dλ, self.cfg.λ)
 
         if (self.cfg.steps_per_resample and self.step % self.cfg.steps_per_resample == 0) and (
                 not self.cfg.num_resamples or self.step // self.cfg.steps_per_resample <= self.cfg.num_resamples):

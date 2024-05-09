@@ -97,16 +97,16 @@ class AutoEncoder(nn.Module):
         if cfg.record_data:
             self.register_data_buffers(cfg)
 
-    def forward(self, x, lamb, input_scale=False, decoder_norm=False, mean_batch=True, latent_p=1):
+    def forward(self, x, λ, input_scale=False, decoder_scale=False, mean_batch=True, latent_p=1):
         encoded = self.encode(x)
         reconstructed = self.decode(encoded)
         loss, l1, mse = self.loss(
             x,
             reconstructed,
             encoded,
-            lamb,
+            λ,
             input_scale,
-            decoder_norm,
+            decoder_scale,
             mean_batch,
             latent_p
         )
@@ -128,12 +128,63 @@ class AutoEncoder(nn.Module):
     def decode(self, x):
         return self.decoder(x) + self.decoder_bias
 
-    def loss(self, x, x_out, latent, lamb, input_scale, decoder_norm, mean_batch, latent_p):
-        l1 = self.latent_norm(x, latent, latent_p, input_scale, decoder_norm, mean_batch)
+    def loss(self, x, x_out, latent, λ, input_scale, decoder_scale, mean_batch, latent_p):
+        l1 = self.latent_norm(x, latent, latent_p, input_scale, decoder_scale, mean_batch)
         mse = self.recons(x, x_out, input_scale, mean_batch)
-        total = (lamb * l1) + mse
+        total = (λ * l1) + mse
 
         return total, l1, mse
+
+    @staticmethod
+    def recons(x, recons, input_scale, mean_batch):
+        """
+        The MSE between the input and its reconstruction
+
+        [n_dim]*2 -> []
+        Or
+        [batch, n_dim]*2 -> []
+        Or
+        [batch, layer, n_dim]*2 -> [layer]
+
+        :param x: the input
+        :param recons: the reconstruction
+        :param input_scale: whether to scale the MSE by the mean square of the input
+        :param mean_batch: whether to average over the batch
+        """
+        mse = ((x - recons) ** 2).mean(dim=-1)
+
+        if input_scale:
+            mse = mse / (x ** 2).mean(dim=-1)
+
+        return mse.mean(dim=0) if mean_batch else mse
+
+    def latent_norm(self, x, latent, p, input_scale, decoder_scale, mean_batch):
+        """
+        The Lp norm of the latent representation
+
+        [n_dim], [m_dim] -> []
+        Or
+        [batch, n_dim], [batch, m_dim] -> []
+        Or
+        [batch, layer, n_dim], [batch, layer, m_dim] -> [layer]
+
+        :param x: the input
+        :param latent: the latent representation
+        :param p: the norm to use
+        :param input_scale: whether to scale the latent norm by the L2 norm of the input
+        :param decoder_scale: whether to scale the latent activations by the L2 norms of the decoder vectors
+        :param mean_batch: whether to average over the batch
+        """
+
+        if decoder_scale:
+            latent = latent * self.decoder.weight.norm(dim=0, p=2)
+
+        n = latent.norm(dim=-1, p=p)
+
+        if input_scale:
+            n = n / x.norm(dim=-1, p=2)
+
+        return n.mean(dim=0) if mean_batch else n
 
     # Mappings for using SAE-Vis
     @property
@@ -151,57 +202,6 @@ class AutoEncoder(nn.Module):
     @property
     def b_dec(self):
         return self.decoder_bias
-
-    @staticmethod
-    def recons(x, recons, input_ms, mean_batch):
-        """
-        The MSE between the input and its reconstruction, normalized by the mean square of the input, averaged over the
-        batch.
-
-        [n_dim]*2 -> []
-        Or
-        [batch, n_dim]*2 -> []
-        Or
-        [batch, layer, n_dim]*2 -> [layer]
-
-        :param x: the input
-        :param recons: the reconstruction
-        :param input_ms: whether to normalize the MSE by the mean square of the input
-        :param mean_batch: whether to average over the batch
-        """
-        mse = ((x - recons) ** 2).mean(dim=-1)
-
-        if input_ms:
-            mse = mse / (x ** 2).mean(dim=-1)
-
-        return mse.mean(dim=0) if mean_batch else mse
-
-    def latent_norm(self, x, latent, p, input_norm, decoder_norm, mean_batch):
-        """
-        The Lp norm of the latent representation
-
-        [n_dim], [m_dim] -> []
-        Or
-        [batch, n_dim], [batch, m_dim] -> []
-        Or
-        [batch, layer, n_dim], [batch, layer, m_dim] -> [layer]
-
-        :param x: the input
-        :param latent: the latent representation
-        :param input_norm: whether to scale the Lp norm of the latent representation by the L2 norm of the input
-        :param decoder_norm: whether to scale the latent representation by the L2 norm of the decoder weights
-        :param mean_batch: whether to average over the batch
-        """
-
-        if decoder_norm:
-            latent = latent * self.decoder.weight.norm(dim=0, p=2)
-
-        n = latent.norm(dim=-1, p=p)
-
-        if input_norm:
-            n = n / x.norm(dim=-1, p=2)
-
-        return n.mean(dim=0) if mean_batch else n
 
     def resample_neurons(self, inputs, batch_size, optimizer):
         """
