@@ -292,13 +292,19 @@ class AutoEncoder(nn.Module):
 
     @torch.no_grad()
     def record_fvu_data(self, x: torch.Tensor, mse: torch.Tensor):
+        """
+        Record the data needed to calculate the average FVU
+
+        :param x: the input [batch, num_layers, n_dim]
+        :param mse: the mean squared error [num_layers]
+        """
         batch_size = x.shape[0]
 
         n = self.num_forward_passes
 
         # Exponential moving average of the MSE, effectively updated `batch_size` times
-        alpha = 0.05
-        self.mse_ema = ((1 - alpha) ** batch_size) * (self.mse_ema - mse) + mse
+        α = 0.001
+        self.mse_ema = ((1 - α) ** batch_size) * (self.mse_ema - mse) + mse
 
         # Update variance to include new inputs
         self.input_avg = ((n * self.input_avg) + x.sum(dim=0)) / (n + batch_size)
@@ -324,18 +330,28 @@ class AutoEncoder(nn.Module):
 
         return freqs, avg_fired, avg_fvu
 
-    def save(self, checkpoint):
-        filename = f"{self.cfg.name}_{checkpoint}"
-        torch.save(self.state_dict(), f"{self.cfg.save_dir}/{filename}.pt")
-        with open(f"{self.cfg.save_dir}/{self.cfg.name}_cfg.json", "w") as f:
+    def save(self, checkpoint: str = ""):
+        chk = ("_" if checkpoint else "") + (checkpoint or "")
+
+        state_file = f"{self.cfg.save_dir}/{self.cfg.name}{chk}.pt"
+        cfg_file = f"{self.cfg.save_dir}/{self.cfg.name}_cfg.json"
+
+        torch.save(self.state_dict(), state_file)
+        with open(cfg_file, "w") as f:
             json.dump(self.cfg, f, cls=AutoEncoderConfigEncoder)
 
     @classmethod
-    def load(cls, name, checkpoint, save_dir="./weights"):
-        filename = f"{save_dir}/{name}_{checkpoint}.pt"
-        with open(f"{save_dir}/{name}_cfg.json", "r") as f:
+    def load(cls, name, checkpoint: str = "", save_dir="./weights"):
+        chk = ("_" if checkpoint else "") + (checkpoint or "")
+
+        state_file = f"{save_dir}/{name}{chk}.pt"
+        cfg_file = f"{save_dir}/{name}_cfg.json"
+
+        with open(cfg_file, "r") as f:
             cfg = json.load(f, cls=AutoEncoderConfigDecoder)
+
         model = cls(cfg)
-        model.load_state_dict(torch.load(filename))
-        print(f"Loaded model from {filename}")
+        model.load_state_dict(torch.load(state_file))
+        print(f"Loaded model from {state_file}")
+
         return model

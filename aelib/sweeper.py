@@ -85,85 +85,85 @@ def create_trainer_worker(pidx: int, offset: int, sweep_cfgs: list[dict], act_qu
     sweep_cfg = sweep_cfgs[pidx]
     act_queue = act_queues[pidx]
 
-    if cfg.act_norms is not None:
-        # multi-layer autoencoder
-        encoder_cfg = AutoEncoderMultiLayerConfig(
-            n_dim=cfg.n_dim,
-            m_dim=cfg.m_dim,
-            act_norms=cfg.act_norms,
-            act_renorm_type=sweep_cfg["act_renorm_type"],
-            act_renorm_scale=sweep_cfg["act_renorm_scale"],
-            device=cfg.device,
-            dtype=cfg.dtype,
-            record_data=True,
-        )
-
-        trainer_cfg = AutoEncoderMultiLayerTrainerConfig(
-            lr=sweep_cfg["lr"],
-            β1=sweep_cfg["β1"],
-            β2=sweep_cfg["β2"],
-            λ=sweep_cfg["λ"],
-            total_steps=cfg.total_activations // cfg.batch_size,
-            lr_warmup_pct=sweep_cfg["lr_warmup_pct"],
-            lr_decay_pct=sweep_cfg["lr_decay_pct"],
-            λ_warmup_pct=sweep_cfg["λ_warmup_pct"],
-            input_scale=sweep_cfg["input_scale"],
-            decoder_scale=sweep_cfg["decoder_scale"],
-            latent_p=sweep_cfg["latent_p"],
-            wb_project=cfg.wb_project,
-            wb_entity=cfg.wb_entity,
-            wb_name="{}: λ{:.1e}_LR{:.1e}_β₁{}_β₂{}".format(
-                offset + pidx,
-                sweep_cfg["λ"],
-                sweep_cfg["lr"],
-                sweep_cfg["β1"],
-                sweep_cfg["β2"]
-            ),
-            wb_group=cfg.wb_group,
-            wb_config={
-                **(cfg.wb_config or {}),
-                **sweep_cfg,
-            },
-        )
-
-        trainer = AutoEncoderMultiLayerTrainer(encoder_cfg, trainer_cfg)
-    else:
-        # single-layer autoencoder
-        encoder_cfg = AutoEncoderConfig(
-            n_dim=cfg.n_dim,
-            m_dim=cfg.m_dim,
-            device=cfg.device,
-            dtype=cfg.dtype,
-            record_data=True,
-        )
-
-        trainer_cfg = AutoEncoderTrainerConfig(
-            lr=sweep_cfg["lr"],
-            beta1=sweep_cfg["beta1"],
-            beta2=sweep_cfg["beta2"],
-            l1_weight=sweep_cfg["l1_weight"],
-            total_steps=cfg.total_activations // cfg.batch_size,
-            lr_warmup_pct=sweep_cfg["lr_warmup_pct"],
-            lr_decay_pct=sweep_cfg["lr_decay_pct"],
-            l1_warmup_pct=sweep_cfg["l1_warmup_pct"],
-            wb_project=cfg.wb_project,
-            wb_entity=cfg.wb_entity,
-            wb_name="{}: L{}_R{:.1e}_LR={:.1e}".format(
-                offset + pidx,
-                sweep_cfg["layer"],
-                sweep_cfg["l1_weight"],
-                sweep_cfg["lr"]
-            ),
-            wb_group=cfg.wb_group,
-            wb_config={
-                **(cfg.wb_config or {}),
-                **sweep_cfg,
-            },
-        )
-
-        trainer = AutoEncoderTrainer(encoder_cfg, trainer_cfg)
-
     try:
+        if cfg.act_norms is not None:
+            # multi-layer autoencoder
+            encoder_cfg = AutoEncoderMultiLayerConfig(
+                n_dim=cfg.n_dim,
+                m_dim=cfg.m_dim,
+                act_norms=cfg.act_norms,
+                act_renorm_type=sweep_cfg["act_renorm_type"],
+                act_renorm_scale=sweep_cfg["act_renorm_scale"],
+                device=cfg.device,
+                dtype=cfg.dtype,
+                record_data=True,
+            )
+
+            trainer_cfg = AutoEncoderMultiLayerTrainerConfig(
+                lr=sweep_cfg["lr"],
+                β1=sweep_cfg["β1"],
+                β2=sweep_cfg["β2"],
+                λ=sweep_cfg["λ"],
+                total_steps=cfg.total_activations // cfg.batch_size,
+                lr_warmup_pct=sweep_cfg["lr_warmup_pct"],
+                lr_decay_pct=sweep_cfg["lr_decay_pct"],
+                λ_warmup_pct=sweep_cfg["λ_warmup_pct"],
+                input_scale=sweep_cfg["input_scale"],
+                decoder_scale=sweep_cfg["decoder_scale"],
+                latent_p=sweep_cfg["latent_p"],
+                wb_project=cfg.wb_project,
+                wb_entity=cfg.wb_entity,
+                wb_name="{}: λ{:.1e}_LR{:.1e}_β₁{}_β₂{}".format(
+                    offset + pidx,
+                    sweep_cfg["λ"],
+                    sweep_cfg["lr"],
+                    sweep_cfg["β1"],
+                    sweep_cfg["β2"]
+                ),
+                wb_group=cfg.wb_group,
+                wb_config={
+                    **(cfg.wb_config or {}),
+                    **sweep_cfg,
+                },
+            )
+
+            trainer = AutoEncoderMultiLayerTrainer(encoder_cfg, trainer_cfg)
+        else:
+            # single-layer autoencoder
+            encoder_cfg = AutoEncoderConfig(
+                n_dim=cfg.n_dim,
+                m_dim=cfg.m_dim,
+                device=cfg.device,
+                dtype=cfg.dtype,
+                record_data=True,
+            )
+
+            trainer_cfg = AutoEncoderTrainerConfig(
+                lr=sweep_cfg["lr"],
+                beta1=sweep_cfg["beta1"],
+                beta2=sweep_cfg["beta2"],
+                l1_weight=sweep_cfg["l1_weight"],
+                total_steps=cfg.total_activations // cfg.batch_size,
+                lr_warmup_pct=sweep_cfg["lr_warmup_pct"],
+                lr_decay_pct=sweep_cfg["lr_decay_pct"],
+                l1_warmup_pct=sweep_cfg["l1_warmup_pct"],
+                wb_project=cfg.wb_project,
+                wb_entity=cfg.wb_entity,
+                wb_name="{}: L{}_R{:.1e}_LR={:.1e}".format(
+                    offset + pidx,
+                    sweep_cfg["layer"],
+                    sweep_cfg["l1_weight"],
+                    sweep_cfg["lr"]
+                ),
+                wb_group=cfg.wb_group,
+                wb_config={
+                    **(cfg.wb_config or {}),
+                    **sweep_cfg,
+                },
+            )
+
+            trainer = AutoEncoderTrainer(encoder_cfg, trainer_cfg)
+
         while True:
             acts = act_queue.get(block=True, timeout=None)
 
@@ -192,12 +192,12 @@ class AutoEncoderSweeper:
             self.sweep_cfgs = [
                 {
                     "lr": lr,
-                    "beta1": β1,
-                    "beta2": β2,
-                    "l1_weight": λ,
+                    "β1": β1,
+                    "β2": β2,
+                    "λ": λ,
                     "lr_warmup_pct": lr_warmup_pct,
                     "lr_decay_pct": lr_decay_pct,
-                    "l1_warmup_pct": λ_warmup_pct,
+                    "λ_warmup_pct": λ_warmup_pct,
                     "input_scale": input_scale,
                     "decoder_scale": decoder_scale,
                     "latent_p": latent_p,
