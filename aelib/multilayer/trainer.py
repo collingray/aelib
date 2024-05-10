@@ -121,6 +121,12 @@ class AutoEncoderMultiLayerTrainer:
         if self.step % self.cfg.steps_per_report == 0:
             metrics = {}
 
+            metrics["total"] = {
+                "l1": l1.mean().item(),
+                "mse": mse.mean().item(),
+                "loss": loss.mean().item(),
+            }
+
             for layer in range(self.encoder.num_layers):
                 metrics[f"layer_{layer}"] = {
                     "l1": l1[layer].item(),
@@ -130,16 +136,19 @@ class AutoEncoderMultiLayerTrainer:
 
             if self.encoder.cfg.record_data:
                 freqs, avg_l0, avg_fvu = self.encoder.get_data()
+
+                metrics["total"].update({
+                    "feature_density": wandb.Histogram(freqs.mean(dim=0).log10().nan_to_num(neginf=-10).cpu()),
+                    "avg_l0": avg_l0.mean(),
+                    "avg_fvu": avg_fvu.mean()
+                })
+
                 for layer in range(self.encoder.num_layers):
                     metrics[f"layer_{layer}"].update({
                         "feature_density": wandb.Histogram(freqs[layer].log10().nan_to_num(neginf=-10).cpu()),
                         "avg_l0": avg_l0[layer],
                         "avg_fvu": avg_fvu[layer]
                     })
-
-                metrics["total"] = {
-                    "feature_density": wandb.Histogram(freqs.mean(dim=0).log10().nan_to_num(neginf=-10).cpu())
-                }
 
             wandb.log({
                 "lr": self.scheduler.get_last_lr()[0],
@@ -150,10 +159,10 @@ class AutoEncoderMultiLayerTrainer:
         # Log the final data if it was recorded, then finish the wandb run
         if self.encoder.cfg.record_data:
             freqs, avg_l0, avg_fvu = self.encoder.get_data()
-            wandb.log({
+            wandb.log({"total": {
                 "feature_density": wandb.Histogram(freqs.mean(dim=0).log10().nan_to_num(neginf=-10).cpu()),
                 "avg_l0": avg_l0.mean(),
                 "avg_fvu": avg_fvu.mean()
-            })
+            }})
 
         wandb.finish()

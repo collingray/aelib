@@ -100,24 +100,24 @@ def create_trainer_worker(pidx: int, offset: int, sweep_cfgs: list[dict], act_qu
 
         trainer_cfg = AutoEncoderMultiLayerTrainerConfig(
             lr=sweep_cfg["lr"],
-            β1=sweep_cfg["beta1"],
-            β2=sweep_cfg["beta2"],
-            λ=sweep_cfg["l1_weight"],
+            β1=sweep_cfg["β1"],
+            β2=sweep_cfg["β2"],
+            λ=sweep_cfg["λ"],
             total_steps=cfg.total_activations // cfg.batch_size,
             lr_warmup_pct=sweep_cfg["lr_warmup_pct"],
             lr_decay_pct=sweep_cfg["lr_decay_pct"],
-            λ_warmup_pct=sweep_cfg["l1_warmup_pct"],
+            λ_warmup_pct=sweep_cfg["λ_warmup_pct"],
             input_scale=sweep_cfg["input_scale"],
             decoder_scale=sweep_cfg["decoder_scale"],
             latent_p=sweep_cfg["latent_p"],
             wb_project=cfg.wb_project,
             wb_entity=cfg.wb_entity,
-            wb_name="{}: ML_R{:.1e}_rt{}_rs{:g}_LR={:.1e}".format(
+            wb_name="{}: λ{:.1e}_LR{:.1e}_β₁{}_β₂{}".format(
                 offset + pidx,
-                sweep_cfg["l1_weight"],
-                sweep_cfg["act_renorm_type"],
-                sweep_cfg["act_renorm_scale"],
+                sweep_cfg["λ"],
                 sweep_cfg["lr"],
+                sweep_cfg["β1"],
+                sweep_cfg["β2"]
             ),
             wb_group=cfg.wb_group,
             wb_config={
