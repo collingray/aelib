@@ -98,8 +98,8 @@ class AutoEncoder(nn.Module):
             self.register_data_buffers(cfg)
 
     def forward(self, x, λ, input_scale=False, decoder_scale=False, mean_batch=True, latent_p=1):
-        encoded = self.encode(x)
-        reconstructed = self.decode(encoded)
+        encoded = self.encode(x, no_grad=False)
+        reconstructed = self.decode(encoded, no_grad=True)
         loss, l1, mse = self.loss(
             x,
             reconstructed,
@@ -117,16 +117,18 @@ class AutoEncoder(nn.Module):
 
         return encoded, loss, l1, mse
 
-    def encode(self, x, record=True):
-        x = self.relu(self.encoder(x) + self.encoder_bias)
+    def encode(self, x, record=True, no_grad=True):
+        with torch.set_grad_enabled(not no_grad):
+            x = self.relu(self.encoder(x) + self.encoder_bias)
+    
+            if self.cfg.record_data and record:
+                self.record_firing_data(x)
+    
+            return x
 
-        if self.cfg.record_data and record:
-            self.record_firing_data(x)
-
-        return x
-
-    def decode(self, x):
-        return self.decoder(x) + self.decoder_bias
+    def decode(self, x, no_grad=True):
+        with torch.set_grad_enabled(not no_grad):
+            return self.decoder(x) + self.decoder_bias
 
     def loss(self, x, x_out, latent, λ, input_scale, decoder_scale, mean_batch, latent_p):
         l1 = self.latent_norm(x, latent, latent_p, input_scale, decoder_scale, mean_batch)
