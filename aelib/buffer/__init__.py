@@ -1,1 +1,1 @@
-from .buffer import ActivationsBuffer, ActivationsBufferConfig
+from .buffer import ActivationsBuffer
