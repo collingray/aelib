@@ -22,10 +22,10 @@ class ActivationsBuffer:
         buffer_size=256,
         min_capacity=128,
         model_batch_size=8,
-        samples_per_seq=None,
         max_seq_length=None,
         act_size=None,
         shuffle_buffer=True,
+        reshuffle_dataset=False,
         seed=None,
         device="cuda",
         dtype=torch.bfloat16,
@@ -41,10 +41,10 @@ class ActivationsBuffer:
         :param buffer_size: the size of the buffer, in number of activations
         :param min_capacity: the minimum guaranteed capacity of the buffer, in number of activations, used to determine when to refresh the buffer
         :param model_batch_size: the batch size to use in the model when generating activations
-        :param samples_per_seq: the number of activations to randomly sample from each sequence. If None, all activations will be used
         :param max_seq_length: the maximum sequence length to use when generating activations. If None, the sequences will not be truncated
         :param act_size: the size of the activations vectors. If None, it will guess the size from the model's cfg
         :param shuffle_buffer: if True, the buffer will be shuffled after each refresh
+        :param reshuffle_dataset: if True, the dataset will be reshuffled after each refresh
         :param seed: the seed to use for dataset shuffling and activation sampling
         :param device: the device to use for the model, and for returned activations
         :param dtype: the dtype to use for the buffer and model
@@ -63,7 +63,6 @@ class ActivationsBuffer:
         ]
         self.buffer_size = buffer_size
         self.min_capacity = min_capacity
-        self.samples_per_seq = samples_per_seq
         self.max_seq_length = max_seq_length
         self.act_size = act_size
         self.shuffle_buffer = shuffle_buffer
@@ -78,13 +77,10 @@ class ActivationsBuffer:
         if seed:
             torch.manual_seed(seed)
 
-        # pointer to the current position in the dataset
-        self.dataset_pointer = 0
-
         self.data_loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=model_batch_size,
-            shuffle=True,
+            shuffle=reshuffle_dataset,
             pin_memory=True,
             num_workers=8,
         )
@@ -162,9 +158,12 @@ class ActivationsBuffer:
             try:
                 seqs = next(self.data_generator)
             except StopIteration:
-                print("Data generator exhausted, resetting...")
+                print("Reached end of dataset, resetting...")
                 self.reset_dataset()
                 seqs = next(self.data_generator)
+
+            if isinstance(seqs, dict):
+                seqs = seqs["text"]
 
             if self.max_seq_length:
                 with Pool(8) as p:
@@ -181,16 +180,12 @@ class ActivationsBuffer:
             del out
             self.empty_cache()
 
-            # (batch, pos, layers*sites, act_size) -> (batch*samples_per_seq, layers*sites, act_size)
-            acts = torch.stack([cache[name] for name in self.act_names], dim=-2)
-            if self.samples_per_seq:
-                acts = acts[
-                    :, torch.randperm(acts.shape[-3])[: self.samples_per_seq]
-                ].flatten(0, 1)
-            else:
-                acts = acts.flatten(0, 1)
+            # (batch, pos, layers*sites, act_size) -> (batch*pos, layers*sites, act_size)
+            acts = torch.stack(
+                [cache[name] for name in self.act_names], dim=-2
+            ).flatten(0, 1)
 
-            # (batch*samples_per_seq, layers*sites, act_size) -> (batch*samples_per_seq, layers, sites, act_size)
+            # (batch*pos, layers*sites, act_size) -> (batch*pos, layers, sites, act_size)
             acts = acts.view(
                 acts.shape[0],
                 self.n_layers,
@@ -248,7 +243,7 @@ class ActivationsBuffer:
 
         self.buffer_pointer += batch or 1
 
-        return out
+        return out.to(self.device)
 
     def reset_dataset(self):
         """
